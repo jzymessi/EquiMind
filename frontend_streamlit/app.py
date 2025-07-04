@@ -16,11 +16,10 @@ if not api_key:
     st.error("请在项目根目录下新建 .openrouter_key 文件，并填入你的 OpenRouter API Key！")
 
 # 1. 用户输入
-user_input = st.text_input("请输入你的需求（如：查一下苹果公司股价）")
+user_input = st.text_input("请输入你的需求（如：查询微软2024年6月1日至6月10日的日K线）")
 
 # 2. 选择 LLM 模型
 model_list = [
-    "qwen/qwen3-32b:free",
     "qwen/qwen3-235b-a22b:free",
     "deepseek/deepseek-r1-0528:free",
     "qwen/qwq-32b:free",
@@ -42,8 +41,15 @@ if st.button("生成 MCP 请求"):
             "{\n"
             "  \"context\": {\"user_id\": \"leo\"},\n"
             "  \"tool_name\": \"us_stock_data\",\n"
-            "  \"inputs\": {\"symbol\": \"AAPL\"}\n"
+            "  \"inputs\": {\n"
+            "    \"symbol\": \"AAPL\",\n"
+            "    \"type\": \"history\",\n"
+            "    \"start\": \"2024-06-01\",\n"
+            "    \"end\": \"2024-06-10\",\n"
+            "    \"interval\": \"1d\"\n"
+            "  }\n"
             "}\n"
+            "其中：type 可选 current(当前价格)、history(历史价格)、kline(K线)、change(涨跌幅)；start/end 为日期，interval 为K线周期（1d/1wk/1mo）。\n"
             f"用户输入：{user_input}"
         )
         headers = {
@@ -81,7 +87,39 @@ if st.button("调用 MCP 工具"):
         try:
             resp = requests.post(mcp_server_url, json=mcp_json, timeout=30)
             resp.raise_for_status()
+            result_json = resp.json()
             st.subheader("MCP 工具返回结果：")
-            st.json(resp.json())
+            st.json(result_json)
+            st.session_state["result_json"] = result_json
         except Exception as e:
-            st.error(f"MCP Server 调用失败: {e}") 
+            st.error(f"MCP Server 调用失败: {e}")
+
+# 6. 自动总结模块
+if st.button("生成总结"):
+    result_json = st.session_state.get("result_json")
+    if not result_json:
+        st.warning("请先调用 MCP 工具，获取数据后再生成总结！")
+    else:
+        summary_prompt = (
+            "请用简洁中文总结以下股票行情数据的主要信息和投资提示，只输出总结内容，不要解释：\n"
+            f"{json.dumps(result_json, ensure_ascii=False)}"
+        )
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": selected_model,
+            "messages": [
+                {"role": "system", "content": "你是金融行情分析助手，擅长用中文总结行情数据。"},
+                {"role": "user", "content": summary_prompt}
+            ]
+        }
+        try:
+            resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data, timeout=30)
+            resp.raise_for_status()
+            summary = resp.json()["choices"][0]["message"]["content"]
+            st.markdown("#### 智能总结：")
+            st.write(summary)
+        except Exception as e:
+            st.error(f"自动总结失败: {e}") 

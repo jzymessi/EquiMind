@@ -54,10 +54,11 @@ EquiMind/
    ```
 
 5. **在浏览器访问前端页面**
-   - 输入你的需求（如"查一下苹果公司股价"）
+   - 输入你的需求（如“查询微软2024年6月1日至6月10日的日K线”）
    - 选择大模型（如 qwen/qwen3-32b:free 等）
-   - 点击"生成 MCP 请求" → 自动生成 JSON
-   - 点击"调用 MCP 工具" → 结果展示
+   - 点击“生成 MCP 请求” → 自动生成 JSON
+   - 点击“调用 MCP 工具” → 结果展示
+   - 点击“生成总结” → LLM 自动总结行情要点
 
 
 ## MCP 协议说明
@@ -66,10 +67,130 @@ EquiMind/
 {
   "context": {"user_id": "leo"},
   "tool_name": "us_stock_data",
-  "inputs": {"symbol": "AAPL"}
+  "inputs": {
+    "symbol": "AAPL",
+    "type": "history",
+    "start": "2024-06-01",
+    "end": "2024-06-10",
+    "interval": "1d"
+  }
 }
 ```
-- Agent 根据 tool_name 自动调度对应工具，返回标准 outputs 字段。
+- type 可选：
+  - current（当前价格）
+  - history（历史价格）
+  - kline（K线数据）
+  - change（涨跌幅）
+- start/end/interval 用于指定查询区间和K线周期
+
+## 典型使用例子
+
+### 例1：查询美股当前价格
+- **输入需求**：查一下苹果公司股价
+- **生成的 JSON**：
+  ```json
+  {
+    "context": {"user_id": "leo"},
+    "tool_name": "us_stock_data",
+    "inputs": {
+      "symbol": "AAPL",
+      "type": "current"
+    }
+  }
+  ```
+- **返回结果**：
+  ```json
+  {
+    "outputs": {
+      "symbol": "AAPL",
+      "name": "Apple Inc.",
+      "price": 190.5,
+      "currency": "USD"
+    }
+  }
+  ```
+- **智能总结**：
+  > 苹果公司（AAPL）当前股价为190.5美元，投资者可关注其后续走势。
+
+### 例2：查询历史价格
+- **输入需求**：查询特斯拉2024年6月1日至6月10日的历史收盘价
+- **生成的 JSON**：
+  ```json
+  {
+    "context": {"user_id": "leo"},
+    "tool_name": "us_stock_data",
+    "inputs": {
+      "symbol": "TSLA",
+      "type": "history",
+      "start": "2024-06-01",
+      "end": "2024-06-10"
+    }
+  }
+  ```
+- **返回结果**：
+  ```json
+  {
+    "outputs": {
+      "symbol": "TSLA",
+      "history_close": {
+        "2024-06-03": 180.2,
+        "2024-06-04": 182.5
+      }
+    }
+  }
+  ```
+- **智能总结**：
+  > 特斯拉（TSLA）在2024年6月1日至6月10日期间收盘价整体呈现小幅上涨，建议关注其后续表现。
+
+### 例3：查询K线数据
+- **输入需求**：查询微软2024年6月1日至6月10日的日K线
+- **生成的 JSON**：
+  ```json
+  {
+    "context": {"user_id": "leo"},
+    "tool_name": "us_stock_data",
+    "inputs": {
+      "symbol": "MSFT",
+      "type": "kline",
+      "start": "2024-06-01",
+      "end": "2024-06-10",
+      "interval": "1d"
+    }
+  }
+  ```
+- **返回结果**：返回日K线数据（包含开盘、收盘、最高、最低、成交量等）。
+- **智能总结**：
+  > 微软（MSFT）在该区间内波动较小，整体走势平稳，建议结合基本面进一步分析。
+
+### 例4：查询涨跌幅
+- **输入需求**：查询谷歌2024年6月1日至6月10日的涨跌幅
+- **生成的 JSON**：
+  ```json
+  {
+    "context": {"user_id": "leo"},
+    "tool_name": "us_stock_data",
+    "inputs": {
+      "symbol": "GOOG",
+      "type": "change",
+      "start": "2024-06-01",
+      "end": "2024-06-10"
+    }
+  }
+  ```
+- **返回结果**：
+  ```json
+  {
+    "outputs": {
+      "symbol": "GOOG",
+      "start_price": 170.0,
+      "end_price": 175.0,
+      "pct_change": 2.94
+    }
+  }
+  ```
+- **智能总结**：
+  > 谷歌（GOOG）在2024年6月1日至6月10日期间上涨了2.94%，表现优于大盘。
+
 
 ## 扩展方式
 - 新增工具：在 `mcp_server/tools/` 目录下添加新模块，并继承 `BaseTool` 实现 `run` 方法。
