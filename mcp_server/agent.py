@@ -1,10 +1,12 @@
 from mcp_server.base_tool import BaseTool
 from mcp_server.tools.stock_data import StockDataTool
+from mcp_server.tools.us_stock_data import USStockDataTool
 
 class Agent:
     def __init__(self):
         self.tools = {}
         self.register_tool('stock_data', StockDataTool())
+        self.register_tool('us_stock_data', USStockDataTool())
 
     def register_tool(self, name: str, tool: BaseTool):
         self.tools[name] = tool

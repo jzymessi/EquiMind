@@ -25,49 +25,51 @@ EquiMind/
   │     ├── base_tool.py         # 工具基类
   │     └── tools/               # MCP工具目录
   │           ├── stock_data.py  # 行情工具示例
+  │           ├── us_stock_data.py # 美股行情工具
+  ├── frontend_streamlit/        # Streamlit 前端
+  │     └── app.py               # 前端主页面
   ├── requirements.txt           # 依赖包
-  └── config.py                  # 配置文件
+  ├── config.py                  # 配置文件
+  └── .openrouter_key            # OpenRouter API Key 文件
 ```
+
+## 快速开始
+
+1. **安装依赖**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **启动 MCP Server**
+   ```bash
+   uvicorn mcp_server.server:app --host 0.0.0.0 --port 8000
+   ```
+
+3. **准备 OpenRouter API Key**
+   - 在项目根目录下新建 `.openrouter_key` 文件，并将你的 OpenRouter API Key 填入（只需一行）。
+
+4. **运行前端页面**
+   ```bash
+   streamlit run frontend_streamlit/app.py
+   ```
+
+5. **在浏览器访问前端页面**
+   - 输入你的需求（如"查一下苹果公司股价"）
+   - 选择大模型（如 qwen/qwen3-32b:free 等）
+   - 点击"生成 MCP 请求" → 自动生成 JSON
+   - 点击"调用 MCP 工具" → 结果展示
+
 
 ## MCP 协议说明
 - 统一的 JSON 消息格式：
 ```json
 {
   "context": {"user_id": "leo"},
-  "tool_name": "stock_data",
-  "inputs": {"symbol": "600519"}
+  "tool_name": "us_stock_data",
+  "inputs": {"symbol": "AAPL"}
 }
 ```
 - Agent 根据 tool_name 自动调度对应工具，返回标准 outputs 字段。
-
-## 快速开始
-1. 安装依赖
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. 启动服务
-   ```bash
-   uvicorn mcp_server.server:app --host 0.0.0.0 --port 8000
-   ```
-3. 发送 MCP 请求（如用 curl 或 Postman）：
-   ```json
-   POST http://localhost:8000/mcp
-   {
-     "context": {"user_id": "leo"},
-     "tool_name": "stock_data",
-     "inputs": {"symbol": "600519"}
-   }
-   ```
-   返回：
-   ```json
-   {
-     "outputs": {
-       "symbol": "600519",
-       "price": 1800.0,
-       "pe": 25.0
-     }
-   }
-   ```
 
 ## 扩展方式
 - 新增工具：在 `mcp_server/tools/` 目录下添加新模块，并继承 `BaseTool` 实现 `run` 方法。
