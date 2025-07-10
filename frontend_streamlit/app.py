@@ -36,20 +36,18 @@ if st.button("生成 MCP 请求"):
         st.warning("请输入需求，并确保 .openrouter_key 文件存在且有内容！")
     else:
         prompt = (
-            "你是一个MCP协议助手。请根据用户输入，生成一条用于调用 MCP 协议 us_stock_data 工具的 JSON 请求。"
+            "你是一个MCP协议助手。请根据用户输入，生成一条用于调用 MCP 协议 smart_stock_screening 工具的 JSON 请求。"
             "严格只返回如下格式的 JSON，不要代码块、不要解释、不要多余字段：\n"
             "{\n"
             "  \"context\": {\"user_id\": \"leo\"},\n"
-            "  \"tool_name\": \"us_stock_data\",\n"
+            "  \"tool_name\": \"smart_stock_screening\",\n"
             "  \"inputs\": {\n"
-            "    \"symbol\": \"AAPL\",\n"
-            "    \"type\": \"history\",\n"
-            "    \"start\": \"2024-06-01\",\n"
-            "    \"end\": \"2024-06-10\",\n"
-            "    \"interval\": \"1d\"\n"
+            "    \"symbols\": [\"AAPL\", \"MSFT\", \"GOOG\", \"AMZN\", \"META\"],\n"
+            "    \"factors\": {\"close\": 1.0},\n"
+            "    \"top_n\": 10\n"
             "  }\n"
             "}\n"
-            "其中：type 可选 current(当前价格)、history(历史价格)、kline(K线)、change(涨跌幅)；start/end 为日期，interval 为K线周期（1d/1wk/1mo）。\n"
+            "其中：symbols 为美股代码列表（可选，留空则用默认）；factors 为选股因子及权重（如 {\"close\": 1.0}，可选）；top_n 为返回股票数量（可选，默认3）。\n"
             f"用户输入：{user_input}"
         )
         headers = {
