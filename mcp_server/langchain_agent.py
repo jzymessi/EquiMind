@@ -37,7 +37,7 @@ class EquiMindAgent:
         # 初始化记忆
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
-            return_messages=True，
+            return_messages=True,
             k=10   # 只保留近10轮
         )
         

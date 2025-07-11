@@ -8,7 +8,7 @@ import yfinance as yf
 
 # S&P500部分科技股列表
 SP500_TECH_SYMBOLS = [
-    "AAPL", "MSFT", "GOOG", "NVDA", "AMD"
+    "AAPL", "MSFT", "GOOG", "GOOGL", "NVDA", "AMD", "META", "AMZN", "TSLA", "CRM", "ADBE", "ORCL", "CSCO", "AVGO", "QCOM", "INTC", "TXN", "IBM", "NOW", "INTU", "AMAT", "LRCX", "MU", "ADI", "KLAC", "SNPS", "CDNS", "MSI", "FISV", "CTSH", "DXC", "HPQ", "PAYC", "ANET", "WDAY", "FTNT", "PANW", "ZS", "DDOG", "MDB", "TEAM", "OKTA", "NET", "DOCU", "SPLK", "ACN", "V", "MA", "PYPL", "GPN", "FIS", "FLT", "ENPH", "SEDG", "ON", "MRVL", "SWKS", "NXPI", "KEYS", "TEL", "GLW", "APH", "STX", "WDC", "HPE", "NTAP", "XRX", "ZBRA"
 ]
 
 def fetch_daily(symbol: str) -> Optional[pd.DataFrame]:
@@ -67,15 +67,12 @@ class SmartStockScreeningInput(BaseModel):
 
 class SmartStockScreeningTool(BaseTool):
     name: str = "smart_stock_screening"
-    description: str = "根据市盈率、涨幅、行业等因子智能筛选适合投资的美股，特别关注科技行业"
+    description: str = "根据多因子（市盈率、PEG、营收增长、净利率、ROE、分红率、beta等）智能筛选美股，特别关注科技行业"
     args_schema: type = SmartStockScreeningInput
     
     def _run(self, symbols: Optional[List[str]] = None, top_n: int = 5) -> Dict[str, Any]:
-        """智能股票筛选"""
-        # 默认用S&P500科技股池
         symbols = symbols or SP500_TECH_SYMBOLS
         results = []
-        
         for symbol in symbols:
             print(f"正在处理股票: {symbol}")
             df = fetch_daily(symbol)
@@ -85,7 +82,7 @@ class SmartStockScreeningTool(BaseTool):
             if df is None or overview is None:
                 print(f"{symbol} 数据获取失败，跳过")
                 continue
-            # index 归一化安全处理，确保与 USStockDataTool 一致
+            # index 归一化安全处理
             if not isinstance(df.index, pd.DatetimeIndex):
                 df.index = pd.to_datetime(df.index)
             df.index = pd.Index([d.normalize() if isinstance(d, pd.Timestamp) else pd.to_datetime(d).normalize() for d in df.index])
@@ -93,25 +90,71 @@ class SmartStockScreeningTool(BaseTool):
             sector = overview.get('sector', '')
             if 'Technology' not in sector:
                 print(f"{symbol} 非科技行业 (sector={sector})，跳过")
-                continue  # 只选科技行业
+                continue
             industry = overview.get('industry', '')
             print(f"{symbol}: sector={sector}, industry={industry}")
+            # 多因子提取
             try:
                 pe = float(overview.get('trailingPE', 0))
             except:
                 pe = 0
+            try:
+                peg = float(overview.get('pegRatio', 0))
+            except:
+                peg = 0
+            try:
+                revenue_growth = float(overview.get('revenueGrowth', 0))
+            except:
+                revenue_growth = 0
+            try:
+                profit_margin = float(overview.get('profitMargins', 0))
+            except:
+                profit_margin = 0
+            try:
+                roe = float(overview.get('returnOnEquity', 0))
+            except:
+                roe = 0
+            try:
+                dividend_yield = float(overview.get('dividendYield', 0))
+            except:
+                dividend_yield = 0
+            try:
+                beta = float(overview.get('beta', 0))
+            except:
+                beta = 0
             ret_5d = calc_return(df, 5)
-            # 打分：PE越低越好，涨幅越高越好
+            price = round(df["Close"].iloc[-1], 2)
+            # 多因子归一化打分（越高越好）
             pe_score = 1/pe if pe > 0 else 0
-            ret_score = ret_5d if ret_5d is not None else 0
-            score = pe_score * 0.5 + ret_score * 0.5
+            peg_score = 1/peg if peg > 0 else 0
+            revenue_score = revenue_growth if revenue_growth > 0 else 0
+            profit_score = profit_margin if profit_margin > 0 else 0
+            roe_score = roe if roe > 0 else 0
+            dividend_score = dividend_yield if dividend_yield > 0 else 0
+            beta_score = 1/beta if beta > 0 else 0
+            # 固定权重综合打分
+            score = (
+                pe_score * 0.2 +
+                peg_score * 0.15 +
+                revenue_score * 0.15 +
+                profit_score * 0.15 +
+                roe_score * 0.1 +
+                dividend_score * 0.1 +
+                beta_score * 0.15
+            )
             results.append({
                 "symbol": symbol,
                 "score": round(score, 4),
                 "pe": pe,
+                "peg": peg,
+                "revenue_growth": revenue_growth,
+                "profit_margin": profit_margin,
+                "roe": roe,
+                "dividend_yield": dividend_yield,
+                "beta": beta,
                 "industry": industry,
                 "ret_5d": round(ret_5d * 100, 2) if ret_5d is not None else None,
-                "price": round(df["Close"].iloc[-1], 2)
+                "price": price
             })
         results = sorted(results, key=lambda x: x["score"], reverse=True)[:top_n]
         return {"stocks": results}
