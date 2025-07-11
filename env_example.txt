@@ -1,0 +1,10 @@
+# OpenAI API Key (用于 LangChain) - 支持 OpenAI 或 OpenRouter
+OPENAI_API_KEY=your_key
+
+# 服务器配置
+HOST=0.0.0.0
+PORT=8000
+
+# OpenRouter 配置（可选）
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 
+

@@ -1,123 +1,216 @@
 import streamlit as st
 import requests
 import json
-import os
+import time
 
-st.set_page_config(page_title="EquiMind LLM-MCP 测试前端", layout="centered")
-st.title("EquiMind LLM-MCP 智能工具测试平台")
+# 页面配置
+st.set_page_config(
+    page_title="EquiMind - 智能投资助手",
+    page_icon="📈",
+    layout="wide"
+)
 
-# 读取本地 OpenRouter API Key
-api_key = None
-if os.path.exists(".openrouter_key"):
-    with open(".openrouter_key", "r") as f:
-        api_key = f.read().strip()
+# 标题
+st.title("🤖 EquiMind - 智能投资助手")
+st.markdown("基于 LangChain + LangGraph 的智能投资决策平台")
 
-if not api_key:
-    st.error("请在项目根目录下新建 .openrouter_key 文件，并填入你的 OpenRouter API Key！")
-
-# 1. 用户输入
-user_input = st.text_input("请输入你的需求（如：查询微软2024年6月1日至6月10日的日K线）")
-
-# 2. 选择 LLM 模型
-model_list = [
-    "qwen/qwen3-235b-a22b:free",
-    "deepseek/deepseek-r1-0528:free",
-    "qwen/qwq-32b:free",
-    "google/gemma-3-27b-it:free"
-]
-selected_model = st.selectbox("选择大模型 (OpenRouter)", model_list)
-
-# 3. MCP Server 地址
-mcp_server_url = st.text_input("MCP Server 地址", value="http://localhost:8000/mcp")
-
-# 4. 生成 MCP JSON
-if st.button("生成 MCP 请求"):
-    if not user_input or not api_key:
-        st.warning("请输入需求，并确保 .openrouter_key 文件存在且有内容！")
-    else:
-        prompt = (
-            "你是一个MCP协议助手。请根据用户输入，生成一条用于调用 MCP 协议 smart_stock_screening 工具的 JSON 请求。"
-            "严格只返回如下格式的 JSON，不要代码块、不要解释、不要多余字段：\n"
-            "{\n"
-            "  \"context\": {\"user_id\": \"leo\"},\n"
-            "  \"tool_name\": \"smart_stock_screening\",\n"
-            "  \"inputs\": {\n"
-            "    \"symbols\": [\"AAPL\", \"MSFT\", \"GOOG\", \"AMZN\", \"META\"],\n"
-            "    \"factors\": {\"close\": 1.0},\n"
-            "    \"top_n\": 10\n"
-            "  }\n"
-            "}\n"
-            "其中：symbols 为美股代码列表（可选，留空则用默认）；factors 为选股因子及权重（如 {\"close\": 1.0}，可选）；top_n 为返回股票数量（可选，默认3）。\n"
-            f"用户输入：{user_input}"
-        )
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": selected_model,
-            "messages": [
-                {"role": "system", "content": "你是MCP协议助手，负责将自然语言转为MCP JSON请求。"},
-                {"role": "user", "content": prompt}
-            ]
-        }
+# 侧边栏配置
+with st.sidebar:
+    st.header("⚙️ 配置")
+    
+    # API 配置
+    api_url = st.text_input(
+        "MCP Server URL",
+        value="http://localhost:8000",
+        help="EquiMind MCP Server 地址"
+    )
+    
+    # 模式选择
+    mode = st.selectbox(
+        "选择模式",
+        ["智能 Agent", "投资工作流", "直接工具调用"],
+        help="选择不同的处理模式"
+    )
+    
+    # 清除记忆按钮
+    if st.button("🧹 清除对话记忆"):
         try:
-            resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data, timeout=30)
-            resp.raise_for_status()
-            llm_content = resp.json()["choices"][0]["message"]["content"]
-            st.code(llm_content, language="json")
-            # 尝试解析为 dict
+            response = requests.post(f"{api_url}/agent/clear")
+            if response.status_code == 200:
+                st.success("记忆已清除")
+            else:
+                st.error("清除失败")
+        except Exception as e:
+            st.error(f"连接失败: {e}")
+
+# 主界面
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.header("💬 智能对话")
+    
+    # 用户输入
+    user_query = st.text_area(
+        "请输入你的投资需求",
+        placeholder="例如：帮我推荐5个现在适合投资的美股",
+        height=100
+    )
+    
+    # 上下文信息
+    context = st.text_area(
+        "上下文信息（可选）",
+        value='{"user_id": "leo", "risk_preference": "moderate"}',
+        height=80,
+        help="JSON 格式的上下文信息"
+    )
+    
+    # 按钮区域
+    col1_1, col1_2, col1_3 = st.columns(3)
+    
+    with col1_1:
+        if st.button("🚀 智能分析", type="primary"):
+            if user_query:
+                with st.spinner("正在分析..."):
+                    try:
+                        if mode == "智能 Agent":
+                            response = requests.post(
+                                f"{api_url}/agent/query",
+                                json={
+                                    "user_query": user_query,
+                                    "context": json.loads(context) if context else {}
+                                }
+                            )
+                        elif mode == "投资工作流":
+                            response = requests.post(
+                                f"{api_url}/workflow/investment",
+                                json={
+                                    "user_query": user_query,
+                                    "context": json.loads(context) if context else {}
+                                }
+                            )
+                        else:
+                            # 直接工具调用
+                            response = requests.post(
+                                f"{api_url}/mcp/call",
+                                json={
+                                    "user_query": user_query,
+                                    "context": json.loads(context) if context else {}
+                                }
+                            )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            st.success("分析完成！")
+                            st.json(result)  # 调试：展示完整后端返回内容
+                            # 显示结果
+                            if mode == "投资工作流":
+                                st.subheader("📊 投资决策结果")
+                                if "final_recommendation" in result:
+                                    rec = result["final_recommendation"]
+                                    st.markdown(f"**推荐建议：**\n{rec.get('recommendation', '')}")
+                                    
+                                    if "stocks" in rec:
+                                        st.subheader("📈 推荐股票")
+                                        stocks = rec["stocks"]
+                                        for i, stock in enumerate(stocks, 1):
+                                            st.markdown(f"""
+                                            **{i}. {stock['symbol']}**
+                                            - 价格: ${stock['price']}
+                                            - 市盈率: {stock['pe']}
+                                            - 5日涨幅: {stock['ret_5d']}%
+                                            - 行业: {stock['industry']}
+                                            """)
+                            else:
+                                st.subheader("🤖 Agent 回复")
+                                st.markdown(result.get("response", ""))
+                        else:
+                            st.error(f"请求失败: {response.status_code}")
+                            
+                    except Exception as e:
+                        st.error(f"连接失败: {e}")
+            else:
+                st.warning("请输入查询内容")
+    
+    with col1_2:
+        if st.button("📋 生成 JSON"):
+            if user_query:
+                # 简单的 JSON 生成逻辑
+                if "推荐" in user_query or "筛选" in user_query:
+                    generated_json = {
+                        "user_query": user_query,
+                        "context": json.loads(context) if context else {},
+                        "mode": mode
+                    }
+                else:
+                    generated_json = {
+                        "user_query": user_query,
+                        "context": json.loads(context) if context else {},
+                        "mode": mode
+                    }
+                
+                st.json(generated_json)
+            else:
+                st.warning("请输入查询内容")
+    
+    with col1_3:
+        if st.button("🔄 测试连接"):
             try:
-                mcp_json = json.loads(llm_content)
-                st.session_state["mcp_json"] = mcp_json
-                st.success("MCP JSON 生成成功！")
+                response = requests.get(f"{api_url}/")
+                if response.status_code == 200:
+                    st.success("连接成功！")
+                    st.info(response.json().get("message", ""))
+                else:
+                    st.error("连接失败")
             except Exception as e:
-                st.error(f"MCP JSON 解析失败: {e}")
-        except Exception as e:
-            st.error(f"OpenRouter API 调用失败: {e}")
+                st.error(f"连接失败: {e}")
 
-# 5. 调用 MCP Server
-if st.button("调用 MCP 工具"):
-    mcp_json = st.session_state.get("mcp_json")
-    if not mcp_json:
-        st.warning("请先生成 MCP JSON！")
-    else:
-        try:
-            resp = requests.post(mcp_server_url, json=mcp_json, timeout=30)
-            resp.raise_for_status()
-            result_json = resp.json()
-            st.subheader("MCP 工具返回结果：")
-            st.json(result_json)
-            st.session_state["result_json"] = result_json
-        except Exception as e:
-            st.error(f"MCP Server 调用失败: {e}")
+with col2:
+    st.header("📚 功能说明")
+    
+    st.markdown("""
+    ### 🚀 新功能特性
+    
+    **智能 Agent 模式**
+    - 基于 LangChain 的智能对话
+    - 自动工具选择
+    - 上下文记忆
+    
+    **投资工作流模式**
+    - 多步骤投资决策
+    - 市场分析 → 股票筛选 → 风险评估 → 推荐
+    - 基于 LangGraph 的工作流编排
+    
+    **直接工具调用**
+    - 兼容原有 MCP 协议
+    - 直接调用特定工具
+    
+    ### 🛠️ 可用工具
+    
+    1. **智能股票筛选**
+       - 根据市盈率、涨幅、行业筛选
+       - 专注科技股投资
+    
+    2. **美股数据查询**
+       - 实时价格、历史数据
+       - K线、涨跌幅分析
+    """)
+    
+    # 获取工具列表
+    try:
+        response = requests.get(f"{api_url}/tools")
+        if response.status_code == 200:
+            tools = response.json().get("tools", [])
+            st.subheader("🔧 可用工具")
+            for tool in tools:
+                st.markdown(f"**{tool['name']}**: {tool['description']}")
+    except:
+        st.info("无法获取工具列表")
 
-# 6. 自动总结模块
-if st.button("生成总结"):
-    result_json = st.session_state.get("result_json")
-    if not result_json:
-        st.warning("请先调用 MCP 工具，获取数据后再生成总结！")
-    else:
-        summary_prompt = (
-            "请用简洁中文总结以下股票行情数据的主要信息和投资提示，只输出总结内容，不要解释：\n"
-            f"{json.dumps(result_json, ensure_ascii=False)}"
-        )
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": selected_model,
-            "messages": [
-                {"role": "system", "content": "你是金融行情分析助手，擅长用中文总结行情数据。"},
-                {"role": "user", "content": summary_prompt}
-            ]
-        }
-        try:
-            resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data, timeout=30)
-            resp.raise_for_status()
-            summary = resp.json()["choices"][0]["message"]["content"]
-            st.markdown("#### 智能总结：")
-            st.write(summary)
-        except Exception as e:
-            st.error(f"自动总结失败: {e}") 
+# 底部信息
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center'>
+    <p>EquiMind v2.0 - Powered by LangChain + LangGraph</p>
+    <p>智能投资决策平台</p>
+</div>
+""", unsafe_allow_html=True) 

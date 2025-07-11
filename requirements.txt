@@ -1,4 +1,11 @@
 fastapi
 uvicorn
 yfinance
-streamlit 
+streamlit
+langchain
+langchain-openai
+langchain-community
+langgraph
+pandas
+requests
+python-dotenv 
