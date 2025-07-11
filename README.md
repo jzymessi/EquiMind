@@ -1,4 +1,4 @@
-# EquiMind v2.0
+# EquiMind
 
 EquiMind 是一个基于 **LangChain + LangGraph** 的智能投资决策平台。它支持多工具集成、上下文驱动的智能决策，并可通过 API 实现自动化选股、消息推送和交易。
 
