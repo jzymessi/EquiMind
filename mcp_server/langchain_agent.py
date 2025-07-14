@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
-from mcp_server.tools.langchain_tools import SmartStockScreeningTool, USStockDataTool
+from mcp_server.tools.langchain_tools import SmartStockScreeningTool, USStockDataTool, AnalyzeStockTool, AllTechStockDataTool
 
 class EquiMindAgent:
     """EquiMind 智能投资 Agent"""
@@ -31,8 +31,17 @@ class EquiMindAgent:
         # 初始化工具
         self.tools = [
             SmartStockScreeningTool(),
-            USStockDataTool()
+            USStockDataTool(),
+            AnalyzeStockTool(),
+            AllTechStockDataTool()
         ]
+        # 系统Prompt
+        self.system_prompt = (
+            "你是EquiMind智能投顾Agent，善于用量化和多因子分析帮助用户投资决策。"
+            "如需推荐股票，请优先调用 all_tech_stock_data 工具获取全量科技股池数据，"
+            "结合用户的风险偏好、成长性、估值等需求，做出专业推荐。"
+            "如需分析单只股票，请调用 analyze_stock 工具。"
+        )
         
         # 初始化记忆
         self.memory = ConversationBufferMemory(
@@ -48,7 +57,8 @@ class EquiMindAgent:
             agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
             memory=self.memory,
             verbose=True,
-            handle_parsing_errors=True
+            handle_parsing_errors=True,
+            system_prompt=self.system_prompt
         )
     
     def handle_query(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:

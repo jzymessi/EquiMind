@@ -2,7 +2,6 @@ import pandas as pd
 import requests
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
-from config import ALPHAVANTAGE_API_KEY
 from langchain.tools import BaseTool
 import yfinance as yf
 
@@ -258,3 +257,32 @@ class USStockDataTool(BaseTool):
             }
         else:
             return {"error": f"不支持的数据类型: {data_type}"} 
+
+class AnalyzeStockInput(BaseModel):
+    symbol: str = Field(description="美股代码")
+
+class AnalyzeStockTool(BaseTool):
+    name: str = "analyze_stock"
+    description: str = "对指定美股代码进行多因子量化打分和分析，返回分数、分析和建议。"
+    args_schema: type = AnalyzeStockInput
+
+    def _run(self, symbol: str) -> dict:
+        from mcp_server.investment_workflow import analyze_stock
+        return analyze_stock(symbol) 
+
+class AllTechStockDataInput(BaseModel):
+    pass
+
+class AllTechStockDataTool(BaseTool):
+    name: str = "all_tech_stock_data"
+    description: str = "获取当前科技股池所有股票的原始因子数据（如pe、peg、增长率等），用于大模型自主分析和推荐"
+    args_schema: type = AllTechStockDataInput
+
+    def _run(self) -> dict:
+        import pandas as pd
+        try:
+            df = pd.read_csv('data/tech_fundamentals.csv')
+            df = df.fillna(0)
+            return df.to_dict(orient='records')
+        except Exception as e:
+            return {"error": str(e)} 

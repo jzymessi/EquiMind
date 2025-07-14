@@ -3,8 +3,10 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
 from langchain.schema import BaseMessage, HumanMessage, AIMessage
-from mcp_server.tools.langchain_tools import SmartStockScreeningTool, USStockDataTool
+from mcp_server.tools.langchain_tools import SmartStockScreeningTool, USStockDataTool, fetch_daily, fetch_overview, SP500_TECH_SYMBOLS
 import os
+import pandas as pd
+import numpy as np
 
 # 状态定义
 class InvestmentState(TypedDict):
@@ -14,6 +16,7 @@ class InvestmentState(TypedDict):
     stock_screening: Dict[str, Any]
     risk_assessment: Dict[str, Any]
     final_recommendation: Dict[str, Any]
+
 
 # 初始化 LLM - 支持 OpenRouter
 def get_llm():
@@ -40,6 +43,86 @@ llm = get_llm()
 # 工具实例
 stock_screening_tool = SmartStockScreeningTool()
 stock_data_tool = USStockDataTool()
+
+def zscore_normalize(series):
+    mean = series.mean()
+    std = series.std()
+    z = (series - mean) / (std if std > 0 else 1)
+    return 1 / (1 + np.exp(-z))
+
+def quantile_score(series, q=5, reverse=False):
+    bins = pd.qcut(series.rank(method='first'), q=q, labels=False, duplicates='drop')
+    bins = bins.astype(int)
+    if reverse:
+        score = (q - bins - 1) / (q - 1)
+    else:
+        score = bins / (q - 1)
+    return score
+
+def batch_score(df, factor_config):
+    score_df = df.copy()
+    total_weight = 0
+    for factor, cfg in factor_config.items():
+        method = cfg.get('method', 'zscore')
+        weight = cfg.get('weight', 1)
+        reverse = cfg.get('reverse', False)
+        kwargs = cfg.get('kwargs', {})
+        if method == 'zscore':
+            score = zscore_normalize(score_df[factor])
+        elif method == 'quantile':
+            score = quantile_score(score_df[factor], reverse=reverse, **kwargs)
+        else:
+            raise ValueError("method must be 'zscore' or 'quantile'")
+        score_df[f"{factor}_score"] = score * weight
+        total_weight += weight
+    score_cols = [f"{f}_score" for f in factor_config]
+    score_df['total_score'] = score_df[score_cols].sum(axis=1) / total_weight
+    return score_df
+
+factor_config = {
+    'pe': {'method': 'quantile', 'weight': 0.15, 'reverse': True, 'kwargs': {'q': 5}},
+    'peg': {'method': 'quantile', 'weight': 0.15, 'reverse': True, 'kwargs': {'q': 5}},
+    'revenue_growth': {'method': 'zscore', 'weight': 0.2, 'reverse': False},
+    'profit_margin': {'method': 'zscore', 'weight': 0.15, 'reverse': False},
+    'roe': {'method': 'zscore', 'weight': 0.1, 'reverse': False},
+    'dividend_yield': {'method': 'zscore', 'weight': 0.1, 'reverse': False},
+    'beta': {'method': 'quantile', 'weight': 0.15, 'reverse': True, 'kwargs': {'q': 5}},
+}
+
+def analyze_stock(industry_or_code: str) -> dict:
+    symbol = industry_or_code.upper()
+    try:
+        df = pd.read_csv('data/tech_fundamentals.csv')
+    except Exception as e:
+        return {"error": f"本地数据文件读取失败: {e}"}
+    df = df.dropna(subset=['pe', 'revenue_growth'])
+    df = df.fillna(0)
+    df = df.infer_objects(copy=False)
+    result_df = batch_score(df, factor_config)
+    row = result_df[result_df['symbol'] == symbol]
+    if row.empty:
+        return {"error": f"无法获取 {symbol} 的有效数据"}
+    row = row.iloc[0]
+    analysis = f"""
+    市盈率(PE): {row['pe']}, PEG: {row['peg']}, 营收增长: {row['revenue_growth']}, 净利率: {row['profit_margin']}, ROE: {row['roe']}, 分红率: {row['dividend_yield']}, Beta: {row['beta']}
+    评分构成：
+    - pe_score: {round(row['pe_score'], 3)}
+    - peg_score: {round(row['peg_score'], 3)}
+    - revenue_growth_score: {round(row['revenue_growth_score'], 3)}
+    - profit_margin_score: {round(row['profit_margin_score'], 3)}
+    - roe_score: {round(row['roe_score'], 3)}
+    - dividend_yield_score: {round(row['dividend_yield_score'], 3)}
+    - beta_score: {round(row['beta_score'], 3)}
+    """
+    score = round(row['total_score'] * 100, 2)
+    suggestion = "建议买入" if score > 60 else "建议观望"
+    return {
+        "code": symbol,
+        "score": score,
+        "analysis": analysis,
+        "suggestion": suggestion
+    }
+
 
 def analyze_market(state: InvestmentState) -> InvestmentState:
     """市场分析节点"""

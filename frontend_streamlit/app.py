@@ -2,7 +2,10 @@ import streamlit as st
 import requests
 import json
 import time
-
+import pandas as pd
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 页面配置
 st.set_page_config(
     page_title="EquiMind - 智能投资助手",
@@ -13,11 +16,16 @@ st.set_page_config(
 # 侧边栏配置
 with st.sidebar:
     st.header("⚙️ 配置")
-    # 只保留API配置
     api_url = st.text_input(
         "MCP Server URL",
         value="http://localhost:8000",
         help="EquiMind MCP Server 地址"
+    )
+    risk_preference = st.selectbox(
+        "风险偏好（risk，可选）",
+        options=["moderate", "low", "high"],
+        index=0,
+        help="可选：moderate（中等）、low（低）、high（高）"
     )
     # 清除记忆按钮
     if st.button("🧹 清除对话记忆"):
@@ -61,12 +69,8 @@ with col1:
         key="user_query_input",
         on_change=on_user_input
     )
-    context = st.text_area(
-        "上下文信息（可选）",
-        value='{"user_id": "leo", "risk_preference": "moderate"}',
-        height=80,
-        help="JSON 格式的上下文信息"
-    )
+    # 自动组装上下文
+    context = {"user_id": "leo", "risk_preference": risk_preference}
     # 只在有新user消息且未被AI回复时才请求AI
     if (
         st.session_state["chat_history"]
@@ -78,7 +82,7 @@ with col1:
                     f"{api_url}/agent/query",
                     json={
                         "user_query": st.session_state["chat_history"][-1]["content"],
-                        "context": json.loads(context) if context else {}
+                        "context": context
                     }
                 )
                 if response.status_code == 200:
@@ -98,25 +102,19 @@ with col1:
                 st.error(f"连接失败: {e}")
 
 with col2:
-    st.header("📚 功能说明")
-    st.markdown("""
-    ### 🚀 新功能特性
-    - 智能 Agent 对话式投资决策
-    - 多因子智能选股
-    - 上下文记忆与多轮追问
-    - 结构化结果与可视化支持
-    """)
-    
-    # 获取工具列表
+    # --- AI选股助手Top10推荐 ---
+    st.header("🌟 AI选股助手Top10推荐（科技股池）")
     try:
-        response = requests.get(f"{api_url}/tools")
-        if response.status_code == 200:
-            tools = response.json().get("tools", [])
-            st.subheader("🔧 可用工具")
-            for tool in tools:
-                st.markdown(f"**{tool['name']}**: {tool['description']}")
-    except:
-        st.info("无法获取工具列表")
+        df = pd.read_csv("data/tech_fundamentals.csv")
+        from mcp_server.investment_workflow import batch_score, factor_config
+        df = df.dropna(subset=['pe', 'revenue_growth'])
+        df = df.fillna(0)
+        df = df.infer_objects(copy=False)
+        result_df = batch_score(df, factor_config)
+        top10 = result_df.sort_values('total_score', ascending=False).head(10)
+        st.table(top10[['symbol', 'total_score', 'pe', 'peg', 'revenue_growth', 'profit_margin', 'roe', 'dividend_yield', 'beta']])
+    except Exception as e:
+        st.info(f"无法加载Top10推荐: {e}")
 
 # 底部信息
 st.markdown("---")

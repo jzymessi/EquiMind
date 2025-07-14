@@ -1,15 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
 
 # 加载环境变量
 load_dotenv()
 
 # 导入 LangChain 组件
 from mcp_server.langchain_agent import equimind_agent
-from mcp_server.investment_workflow import investment_workflow
+from mcp_server.investment_workflow import investment_workflow, analyze_stock
 from langchain.schema import HumanMessage
 
 app = FastAPI(title="EquiMind MCP Server", version="2.0.0")
@@ -106,6 +107,13 @@ async def mcp_call(request: MCPMessage):
             return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/analyze_stock")
+async def api_analyze_stock(request: Request):
+    data = await request.json()
+    industry_or_code = data.get("industry_or_code", "")
+    result = analyze_stock(industry_or_code)
+    return JSONResponse(content=result)
 
 @app.post("/agent/clear")
 async def clear_agent_memory():
