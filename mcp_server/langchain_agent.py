@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI, OpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
-from mcp_server.tools.stock_funnel_strategy import FunnelStrategyTool
+from .tools.funnel_strategy_tool import FunnelStrategyTool
 
 class EquiMindAgent:
     """EquiMind 智能投资 Agent"""
@@ -88,10 +88,10 @@ class EquiMindAgent:
         ]
         # 系统Prompt
         self.system_prompt = (
-            "你是EquiMind智能投顾Agent，善于用量化和多因子分析帮助用户投资决策。"
-            "如需推荐股票，请优先调用 all_tech_stock_data 工具获取全量科技股池数据，"
-            "结合用户的风险偏好、成长性、估值等需求，做出专业推荐。"
-            "如需分析单只股票，请调用 analyze_stock 工具。"
+            "你是EquiMind智能投顾Agent，专注于'三张王牌+两根线'漏斗选股策略。"
+            "如需推荐股票或分析买卖时机，请调用 funnel_stock_strategy 工具。"
+            "该工具可以全盘扫描护城河股票池（mode='scan'），或检查单只股票（mode='check', symbol='股票代码'）。"
+            "策略核心：只买护城河+高增长+正现金流的公司，且在技术面回调至黄金买点时出手。"
         )
         
         # 初始化记忆
