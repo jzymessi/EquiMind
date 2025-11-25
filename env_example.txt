@@ -1,10 +1,43 @@
 # OpenAI API Key (用于 LangChain) - 支持 OpenAI 或 OpenRouter
-OPENAI_API_KEY=your_key
+OPENAI_API_KEY=your_openai_or_openrouter_key
 
 # 服务器配置
 HOST=0.0.0.0
 PORT=8000
 
-# OpenRouter 配置（可选）
+# AlphaVantage 股票数据 API Key
+ALPHAVANTAGE_API_KEY=your_alphavantage_key
+
+# LLM 提供方选择：vllm / openrouter / openai
+#   vllm       -> 使用本地或私有部署的 OpenAI 兼容接口
+#   openrouter -> 使用 OpenRouter
+#   openai     -> 使用 OpenAI 官方
+EQUIMIND_LLM_PROVIDER=vllm
+
+# OpenRouter 配置（仅在 EQUIMIND_LLM_PROVIDER=openrouter 时需要）
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 
+
+# Telegram 机器人配置（双向对话 + 推送）
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_default_chat_id  # 可选，用于定时推送的默认目标
+
+# 推送时间配置
+NOTIFY_QUIET_HOURS=23:00-07:00
+NOTIFY_COOLDOWN_MIN=30
+MORNING_DIGEST_TIME=08:30
+EVENING_DIGEST_TIME=20:00
+
+# 新闻聚合
+NEWS_RSS_SOURCES=yahoo,nasdaq,seekingalpha,sec
+NEWS_POLL_INTERVAL_MIN=10
+NEWS_MAX_ITEMS_PER_POLL=100
+
+# 自定义 LLM（可选）
+# 在 EQUIMIND_LLM_PROVIDER=vllm 时：
+#   EQUIMIND_LLM_BASE_URL   必填，例如 http://localhost:8000/v1
+#   EQUIMIND_LLM_MODEL      可选，默认 gpt-3.5-turbo
+#   EQUIMIND_LLM_API_KEY    可选，如果你的本地服务需要鉴权
+EQUIMIND_LLM_BASE_URL=
+EQUIMIND_LLM_MODEL=
+EQUIMIND_LLM_API_KEY=
 

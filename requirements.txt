@@ -1,7 +1,6 @@
 fastapi
 uvicorn
 yfinance
-streamlit
 langchain
 langchain-openai
 langchain-community
@@ -9,3 +8,5 @@ langgraph
 pandas
 requests
 python-dotenv 
+feedparser
+apscheduler

@@ -268,26 +268,26 @@ def create_investment_workflow() -> StateGraph:
     workflow = StateGraph(InvestmentState)
     
     # 添加节点
-    workflow.add_node("market_analysis", analyze_market)
-    workflow.add_node("stock_screening", screen_stocks)
-    workflow.add_node("risk_assessment", assess_risk)
-    workflow.add_node("generate_recommendation", generate_recommendation)
+    workflow.add_node("market_analysis_node", analyze_market)
+    workflow.add_node("stock_screening_node", screen_stocks)
+    workflow.add_node("risk_assessment_node", assess_risk)
+    workflow.add_node("generate_recommendation_node", generate_recommendation)
     
     # 设置入口
-    workflow.set_entry_point("market_analysis")
+    workflow.set_entry_point("market_analysis_node")
     
     # 添加边
-    workflow.add_edge("market_analysis", "stock_screening")
-    workflow.add_edge("stock_screening", "risk_assessment")
-    workflow.add_edge("risk_assessment", "generate_recommendation")
-    workflow.add_edge("generate_recommendation", END)
+    workflow.add_edge("market_analysis_node", "stock_screening_node")
+    workflow.add_edge("stock_screening_node", "risk_assessment_node")
+    workflow.add_edge("risk_assessment_node", "generate_recommendation_node")
+    workflow.add_edge("generate_recommendation_node", END)
     
     # 添加条件分支（可选）
     workflow.add_conditional_edges(
-        "stock_screening",
+        "stock_screening_node",
         should_continue_screening,
         {
-            "continue": "risk_assessment",
+            "continue": "risk_assessment_node",
             "stop": END
         }
     )

@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any, List
 from langchain.agents import initialize_agent, AgentType
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
@@ -11,22 +11,76 @@ class EquiMindAgent:
     """EquiMind 智能投资 Agent"""
     
     def __init__(self):
-        # 检查是否使用 OpenRouter
+        # 统一的 LLM 提供方选择：vllm / openrouter / openai
+        provider = (os.getenv("EQUIMIND_LLM_PROVIDER") or "").strip().lower()
+
+        # 公共配置
+        custom_base_url = os.getenv("EQUIMIND_LLM_BASE_URL")
+        custom_model = os.getenv("EQUIMIND_LLM_MODEL")
+        custom_api_key = os.getenv("EQUIMIND_LLM_API_KEY")
+
         openrouter_base_url = os.getenv("OPENROUTER_BASE_URL")
-        
-        if openrouter_base_url:
-            # 使用 OpenRouter
-            self.llm = ChatOpenAI(
-                model="openai/chatgpt-4o-latest",  # 或其他 OpenRouter 支持的模型
-                openai_api_key=os.getenv("OPENAI_API_KEY"),
-                openai_api_base=openrouter_base_url
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+
+        # 显式选择 vllm（本地 / 自建 OpenAI 兼容服务）
+        if provider == "vllm":
+            if not custom_base_url:
+                raise ValueError("EQUIMIND_LLM_PROVIDER=vllm 时必须配置 EQUIMIND_LLM_BASE_URL")
+            self.llm = OpenAI(
+                model=custom_model or "gpt-3.5-turbo",
+                openai_api_key=custom_api_key or openai_api_key or "EMPTY",
+                openai_api_base=custom_base_url,
+                temperature=0.7,
+                max_tokens=2048,
             )
+
+        # 显式选择 OpenRouter
+        elif provider == "openrouter":
+            if not openrouter_base_url:
+                raise ValueError("EQUIMIND_LLM_PROVIDER=openrouter 时必须配置 OPENROUTER_BASE_URL")
+            if not openai_api_key:
+                raise ValueError("EQUIMIND_LLM_PROVIDER=openrouter 时必须配置 OPENAI_API_KEY 作为 OpenRouter 的 API Key")
+            self.llm = ChatOpenAI(
+                model=os.getenv("EQUIMIND_LLM_MODEL") or "openai/chatgpt-4o-latest",
+                openai_api_key=openai_api_key,
+                openai_api_base=openrouter_base_url,
+            )
+
+        # 显式选择 OpenAI 官方
+        elif provider == "openai":
+            if not openai_api_key:
+                raise ValueError("EQUIMIND_LLM_PROVIDER=openai 时必须配置 OPENAI_API_KEY")
+            self.llm = ChatOpenAI(
+                model=os.getenv("EQUIMIND_LLM_MODEL") or "gpt-3.5-turbo",
+                openai_api_key=openai_api_key,
+            )
+
         else:
-            # 使用 OpenAI
-            self.llm = ChatOpenAI(
-                model="gpt-3.5-turbo",
-                openai_api_key=os.getenv("OPENAI_API_KEY")
-            )
+            # 未显式指定 provider 时，保持向后兼容的自动检测逻辑
+            if custom_base_url:
+                # 使用自定义兼容 OpenAI 的接口（如 vLLM）
+                self.llm = OpenAI(
+                    model=custom_model or "gpt-3.5-turbo",
+                    openai_api_key=custom_api_key or openai_api_key or "EMPTY",
+                    openai_api_base=custom_base_url,
+                    temperature=0.7,
+                    max_tokens=2048,
+                )
+            elif openrouter_base_url:
+                # 使用 OpenRouter
+                self.llm = ChatOpenAI(
+                    model=os.getenv("EQUIMIND_LLM_MODEL") or "openai/chatgpt-4o-latest",
+                    openai_api_key=openai_api_key or "EMPTY",
+                    openai_api_base=openrouter_base_url,
+                )
+            else:
+                # 默认使用 OpenAI 官方接口
+                if not openai_api_key:
+                    raise ValueError("未配置 OpenAI API 密钥。请设置 OPENAI_API_KEY 环境变量，或设置 EQUIMIND_LLM_PROVIDER 与对应配置。")
+                self.llm = ChatOpenAI(
+                    model=os.getenv("EQUIMIND_LLM_MODEL") or "gpt-3.5-turbo",
+                    openai_api_key=openai_api_key,
+                )
         
         # 初始化工具
         self.tools = [
@@ -87,6 +141,11 @@ class EquiMindAgent:
                 "error": str(e),
                 "context": context
             }
+
+    def simple_reply(self, user_query: str) -> str:
+        """直接调用底层 LLM，返回最简单的问答结果，不走工具和 Agent。"""
+        # 这里不包装上下文，也不调用任何工具，只做纯模型问答
+        return self.llm.predict(user_query)
     
     def get_available_tools(self) -> List[Dict[str, str]]:
         """获取可用工具列表"""

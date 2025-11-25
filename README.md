@@ -28,6 +28,7 @@ EquiMind 是一个基于 **LangChain + LangGraph** 的智能投资决策平台�
 - 投资决策工作流
 - 风险评估和推荐
 - 提供标准化 API 服务
+- Telegram 机器人推送与对话支持
 
 ## 架构说明
 ```
@@ -65,7 +66,13 @@ ALPHAVANTAGE_API_KEY=your_alphavantage_api_key_here
 
 # 如果使用 OpenRouter，可以设置基础 URL（可选）
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+
+# Telegram 机器人配置
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_default_chat_id
 ```
+
+> 💡 Telegram 机器人的详细配置教程请参考 `TELEGRAM_SETUP.md`。
 
 ### 3. 启动 LangChain Server
 ```bash
