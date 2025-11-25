@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI, OpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
-from mcp_server.tools.langchain_tools import SmartStockScreeningTool, USStockDataTool, AnalyzeStockTool, AllTechStockDataTool
+from mcp_server.tools.stock_funnel_strategy import FunnelStrategyTool
 
 class EquiMindAgent:
     """EquiMind 智能投资 Agent"""
@@ -84,10 +84,7 @@ class EquiMindAgent:
         
         # 初始化工具
         self.tools = [
-            SmartStockScreeningTool(),
-            USStockDataTool(),
-            AnalyzeStockTool(),
-            AllTechStockDataTool()
+            FunnelStrategyTool(),
         ]
         # 系统Prompt
         self.system_prompt = (
