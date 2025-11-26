@@ -5,7 +5,8 @@ from langchain_openai import ChatOpenAI, OpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
-from .tools.funnel_strategy_tool import FunnelStrategyTool
+from .tools.funnel_strategy_tool_v2 import FunnelStrategyToolV2
+from .tools.news_tool import NewsRetrievalTool, MarketNewsAnalysisTool
 
 class EquiMindAgent:
     """EquiMind 智能投资 Agent"""
@@ -84,14 +85,17 @@ class EquiMindAgent:
         
         # 初始化工具
         self.tools = [
-            FunnelStrategyTool(),
+            FunnelStrategyToolV2(),
+            NewsRetrievalTool(),
+            MarketNewsAnalysisTool(),
         ]
         # 系统Prompt
         self.system_prompt = (
-            "你是EquiMind智能投顾Agent，专注于'三张王牌+两根线'漏斗选股策略。"
-            "如需推荐股票或分析买卖时机，请调用 funnel_stock_strategy 工具。"
-            "该工具可以全盘扫描护城河股票池（mode='scan'），或检查单只股票（mode='check', symbol='股票代码'）。"
-            "策略核心：只买护城河+高增长+正现金流的公司，且在技术面回调至黄金买点时出手。"
+            "你是EquiMind智能投顾Agent，拥有三大核心能力：\n"
+            "1. 股票分析：使用 funnel_stock_strategy_v2 工具执行'三张王牌+两根线'漏斗选股策略。\n"
+            "2. 新闻获取：使用 get_financial_news 工具获取最新财经新闻（中文翻译）。\n"
+            "3. 情绪分析：使用 analyze_market_sentiment 工具分析市场情绪。\n"
+            "你可以根据用户需求灵活调用这些工具，提供专业的投资分析和建议。"
         )
         
         # 初始化记忆
@@ -126,9 +130,13 @@ class EquiMindAgent:
             result = self.agent.run(full_query)
             print("Agent LLM result:", result)  # 调试输出
             
+            # 检查结果是否为空或无效
+            if not result or not result.strip():
+                result = "抱歉，我无法为您提供完整的分析结果。请稍后再试或换个问题。"
+            
             return {
                 "success": True,
-                "response": result,
+                "response": result.strip(),
                 "context": context
             }
             
