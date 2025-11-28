@@ -7,6 +7,9 @@ from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
 from .tools.funnel_strategy_tool_v2 import FunnelStrategyToolV2
 from .tools.news_tool import NewsRetrievalTool, MarketNewsAnalysisTool
+from .tools.portfolio_tool import PortfolioManagementTool
+from .tools.alert_tool import SmartAlertTool
+from .tools.chart_tool import ChartGeneratorTool
 
 class EquiMindAgent:
     """EquiMind 智能投资 Agent"""
@@ -88,13 +91,19 @@ class EquiMindAgent:
             FunnelStrategyToolV2(),
             NewsRetrievalTool(),
             MarketNewsAnalysisTool(),
+            PortfolioManagementTool(),
+            SmartAlertTool(),
+            ChartGeneratorTool(),
         ]
         # 系统Prompt
         self.system_prompt = (
-            "你是EquiMind智能投顾Agent，拥有三大核心能力：\n"
+            "你是EquiMind智能投顾Agent，拥有六大核心能力：\n"
             "1. 股票分析：使用 funnel_stock_strategy_v2 工具执行'三张王牌+两根线'漏斗选股策略。\n"
             "2. 新闻获取：使用 get_financial_news 工具获取最新财经新闻（中文翻译）。\n"
             "3. 情绪分析：使用 analyze_market_sentiment 工具分析市场情绪。\n"
+            "4. 持仓管理：使用 portfolio_management 工具管理用户持仓，查看盈亏。\n"
+            "5. 智能提醒：使用 smart_alert 工具设置价格/指标提醒。\n"
+            "6. 图表生成：使用 generate_chart 工具生成股票走势图、RSI图、持仓饼图。\n"
             "你可以根据用户需求灵活调用这些工具，提供专业的投资分析和建议。"
         )
         
@@ -113,12 +122,15 @@ class EquiMindAgent:
             memory=self.memory,
             verbose=True,
             handle_parsing_errors=True,
-            system_prompt=self.system_prompt
+            agent_kwargs={
+                "prefix": self.system_prompt
+            }
         )
     
     def handle_query(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """处理用户查询"""
         try:
+            # print("User query:", user_query)    
             # 构建带上下文的查询
             if context:
                 context_str = f"用户上下文: {context}\n"
@@ -127,16 +139,29 @@ class EquiMindAgent:
                 full_query = user_query
             
             # 执行 Agent
-            result = self.agent.run(full_query)
-            print("Agent LLM result:", result)  # 调试输出
+            agent_result = self.agent.invoke({"input": full_query})
+            
+
+            # 提取结果和中间步骤
+            output_text = ""
+            intermediate_steps = []
+            
+            if isinstance(agent_result, dict):
+                output_text = agent_result.get("output", str(agent_result))
+                intermediate_steps = agent_result.get("intermediate_steps", [])
+            else:
+                output_text = str(agent_result)
+            
+            print("Agent LLM result:", output_text)  # 调试输出
             
             # 检查结果是否为空或无效
-            if not result or not result.strip():
-                result = "抱歉，我无法为您提供完整的分析结果。请稍后再试或换个问题。"
+            if not output_text or not output_text.strip():
+                output_text = "抱歉，我无法为您提供完整的分析结果。请稍后再试或换个问题。"
             
             return {
                 "success": True,
-                "response": result.strip(),
+                "response": output_text.strip(),
+                "intermediate_steps": intermediate_steps,
                 "context": context
             }
             

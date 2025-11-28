@@ -27,7 +27,8 @@ def fetch_updates(token: str, offset: int | None) -> dict:
         params=params,
         timeout=35,
     )
-    resp.raise_for_status()
+    # 检查HTTP响应状态码
+    resp.raise_for_status() 
     return resp.json()
 
 

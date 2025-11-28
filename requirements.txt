@@ -11,3 +11,4 @@ python-dotenv
 feedparser
 apscheduler
 pandas_ta
+matplotlib

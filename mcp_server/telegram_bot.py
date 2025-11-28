@@ -5,13 +5,34 @@ Telegram 机器人模块
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, Optional, List
 
 import requests
 
 from .langchain_agent import equimind_agent
 
 TELEGRAM_API_BASE = "https://api.telegram.org"
+
+
+def _extract_chart_paths(text: str) -> List[str]:
+    """
+    从文本中提取图表路径。
+    查找类似 'data/charts/AAPL_price_20251128_141214.png' 的路径。
+    """
+    # 匹配 data/charts/*.png 格式的路径
+    pattern = r'data/charts/[\w_]+\.png'
+    matches = re.findall(pattern, text)
+    
+    # 过滤出存在的文件
+    valid_paths = []
+    for path in matches:
+        if os.path.exists(path):
+            valid_paths.append(path)
+        else:
+            print(f"[Telegram] 警告: 图表文件不存在: {path}")
+    
+    return valid_paths
 
 
 def _get_bot_token() -> Optional[str]:
@@ -70,6 +91,55 @@ def send_telegram_message(
         return {"success": False, "error": str(exc)}
 
 
+def send_telegram_photo(
+    chat_id: str,
+    photo_path: str,
+    *,
+    caption: Optional[str] = None,
+    parse_mode: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    发送 Telegram 图片消息。
+
+    Args:
+        chat_id: 接收者 chat_id（群或用户）
+        photo_path: 图片文件路径
+        caption: 图片说明文字（可选）
+        parse_mode: MarkdownV2 / HTML / Markdown（可选）
+    """
+    token = _get_bot_token()
+    if not token:
+        return {"success": False, "error": "TELEGRAM_BOT_TOKEN 未配置"}
+
+    url = f"{TELEGRAM_API_BASE}/bot{token}/sendPhoto"
+    
+    # 检查文件是否存在
+    if not os.path.exists(photo_path):
+        return {"success": False, "error": f"图片文件不存在: {photo_path}"}
+    
+    try:
+        with open(photo_path, 'rb') as photo_file:
+            files = {'photo': photo_file}
+            data: Dict[str, Any] = {'chat_id': chat_id}
+            
+            if caption:
+                data['caption'] = caption
+            if parse_mode:
+                data['parse_mode'] = parse_mode
+            
+            resp = requests.post(url, data=data, files=files, timeout=30)
+            resp.raise_for_status()
+            result = resp.json()
+            
+            if result.get("ok"):
+                return {"success": True, "result": result.get("result")}
+            return {"success": False, "error": result.get("description", "未知错误")}
+    except requests.RequestException as exc:
+        return {"success": False, "error": str(exc)}
+    except Exception as exc:
+        return {"success": False, "error": f"读取图片失败: {str(exc)}"}
+
+
 def handle_telegram_update(update: Dict[str, Any]) -> Dict[str, Any]:
     """
     处理 Telegram Webhook 更新。
@@ -119,16 +189,44 @@ def handle_telegram_update(update: Dict[str, Any]) -> Dict[str, Any]:
         query = stripped[len("/agent"):].strip() or "请根据当前市场情况，给出一份投资分析。"
         result = equimind_agent.handle_query(
             user_query=query,
-            context={"user_id": str(user_id or ""), "platform": "telegram"},
+            context={"user_id": str(user_id or ""), "platform": "telegram", "chat_id": str(chat_id)},
         )
 
         if result.get("success"):
             reply_text = result.get("response", "抱歉，我暂时无法给出投资建议。")
+            
+            # 从回复文本和中间步骤中提取图表路径
+            chart_paths = _extract_chart_paths(reply_text)
+            
+            # 如果文本中没有路径，尝试从中间步骤中提取
+            if not chart_paths:
+                intermediate_steps = result.get("intermediate_steps", [])
+                for step in intermediate_steps:
+                    if len(step) >= 2:
+                        # step[1] 是工具的返回结果
+                        tool_output = str(step[1])
+                        chart_paths.extend(_extract_chart_paths(tool_output))
+            
+            # 先发送文本消息
             send_result = send_telegram_message(str(chat_id), reply_text)
             if send_result.get("success"):
                 print(f"[Telegram] [Agent] 已回复消息到 {chat_id}")
             else:
                 print(f"[Telegram] [Agent] 回复失败: {send_result.get('error')}")
+            
+            # 如果有图表，发送图片
+            if chart_paths:
+                for chart_path in chart_paths:
+                    photo_result = send_telegram_photo(
+                        str(chat_id),
+                        chart_path,
+                        caption=f"📊 {os.path.basename(chart_path)}"
+                    )
+                    if photo_result.get("success"):
+                        print(f"[Telegram] [Agent] 已发送图表: {chart_path}")
+                    else:
+                        print(f"[Telegram] [Agent] 图表发送失败: {photo_result.get('error')}")
+            
             return {"success": True, "message": "Agent 消息已处理", "response": reply_text}
 
         error_msg = result.get("error", "unknown error")
